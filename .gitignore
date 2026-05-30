@@ -1,0 +1,9 @@
+# Archivos internos de Claude
+.claude/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
