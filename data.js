@@ -9,7 +9,7 @@ let CATEGORIES = [
   { id: "cupulas",      name: "Colección Cosmos", img: "assets/cosmos/cupula-roja.jpg" },
   { id: "individuales", name: "Rosa Individual",     img: "assets/productos sin usar/individual-roja-1.png", hidden: true },
   { id: "cilindros",    name: "Rosas en Cilindro",   img: "assets/productos sin usar/cilindro-roja-1.png",   hidden: true },
-  { id: "ediciones",    name: "Últimos Lanzamientos", img: "assets/arcadius/arcadius.jpg" },
+  { id: "ediciones",    name: "Colección Arcadius", img: "assets/arcadius/arcadius.jpg" },
   { id: "hortus",       name: "Hortus Conclusus",    img: "assets/hortus-conclusus/Hortus-Conclusus-roja.jpg" }
 ];
 
@@ -139,7 +139,7 @@ let PRODUCTS = [
     images: ["assets/productos sin usar/cilindro-amarilla-1.png"]
   },
 
-  /* ══════════ ÚLTIMOS LANZAMIENTOS — ARCADIUS ══════════ */
+  /* ══════════ COLECCIÓN ARCADIUS ══════════ */
   {
     id: "arcadius-rojo",
     name: "Arcadius · Roja",
