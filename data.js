@@ -7,14 +7,13 @@ let WHATSAPP_NUMBER = "51927599077";
 /* ---------- CATEGORÍAS ---------- */
 let CATEGORIES = [
   { id: "cupulas",      name: "Colección Cosmos", img: "assets/cosmos/cupula-roja.jpg" },
-  { id: "individuales", name: "Rosa Individual",     img: "assets/productos sin usar/individual-roja-1.png", hidden: true },
-  { id: "cilindros",    name: "Rosas en Cilindro",   img: "assets/productos sin usar/cilindro-roja-1.png",   hidden: true },
   { id: "ediciones",    name: "Colección Arcadius", img: "assets/arcadius/arcadius.jpg" },
   { id: "hortus",       name: "Hortus Conclusus",    img: "assets/hortus-conclusus/Hortus-Conclusus-roja.jpg" }
 ];
 
 /* ---------- PRODUCTOS ---------- */
 let PRODUCTS = [
+
 
   {
     id: "cupula-roja",
@@ -26,6 +25,7 @@ let PRODUCTS = [
     description: "Rosa natural preservada con tratamiento artesanal que mantiene su frescura y textura durante más de tres años. Presentada sobre base de madera con acabado natural y cúpula de cristal. Incluye flores secas decorativas.",
     images: ["assets/cosmos/cupula-roja.jpg", "assets/cosmos/cupula-roja-2.jpg"]
   },
+
   {
     id: "cupula-blanca",
     name: "Cosmos · Blanca",
@@ -77,69 +77,8 @@ let PRODUCTS = [
     images: ["assets/cosmos/cupula-amarilla.jpg"]
   },
 
-  /* ══════════ ROSA INDIVIDUAL ══════════ */
-  {
-    hidden: true,
-    id: "individual-roja",
-    name: "Vitreum Obsessio",
-    category: "individuales",
-    price: 0,
-    badge: "new",
-    sizes: ["Única"],
-    colors: ["Rojo"],
-    short: "Una sola rosa. El arma más antigua. La promesa más moderna.",
-    description: "Rosa natural preservada con tallo y hojas originales sobre base de musgo vivo en cubo de vidrio transparente. Ideal como detalle único, sincero y definitivo.",
-    images: [
-      "assets/productos sin usar/individual-roja-1.png",
-      "assets/productos sin usar/individual-roja-2.jpg"
-    ]
-  },
-  {
-    hidden: true,
-    id: "individual-amarilla",
-    name: "Rosa Individual · Amarilla",
-    category: "individuales",
-    price: 0,
-    badge: "new",
-    sizes: ["Única"],
-    colors: ["Amarillo"],
-    short: "Alegría en tallo largo. Un sol que se queda en tu mesa.",
-    description: "Rosa preservada en amarillo intenso con tallo y hojas naturales sobre base de musgo en cubo de vidrio. Un regalo luminoso que no necesita agua ni cuidados.",
-    images: ["assets/productos sin usar/individual-amarilla-1.png"]
-  },
-
-  /* ══════════ ROSAS EN CILINDRO ══════════ */
-  {
-    hidden: true,
-    id: "cilindro-roja",
-    name: "Gémin Sempiternum",
-    category: "cilindros",
-    price: 0,
-    badge: "new",
-    sizes: ["Única"],
-    colors: ["Rojo"],
-    short: "Dos rosas rojas en cilindro de vidrio. Porque algunas historias se cuentan de a dos.",
-    description: "Par de rosas rojas preservadas con tallos y hojas naturales sobre base de musgo vivo en cilindro de vidrio transparente. Composición minimalista que habla de complicidad.",
-    images: [
-      "assets/productos sin usar/cilindro-roja-1.png",
-      "assets/productos sin usar/cilindro-roja-2.png"
-    ]
-  },
-  {
-    hidden: true,
-    id: "cilindro-amarilla",
-    name: "Dúo Solar · Amarillas",
-    category: "cilindros",
-    price: 0,
-    badge: "new",
-    sizes: ["Única"],
-    colors: ["Amarillo"],
-    short: "Dos soles que no se apagan. Amistad, gratitud o simplemente luz.",
-    description: "Par de rosas amarillas preservadas con tallos y hojas naturales sobre base de musgo en cilindro de vidrio. Un regalo que ilumina cualquier rincón durante años.",
-    images: ["assets/productos sin usar/cilindro-amarilla-1.png"]
-  },
-
   /* ══════════ COLECCIÓN ARCADIUS ══════════ */
+
   {
     id: "arcadius-rojo",
     name: "Arcadius · Roja",

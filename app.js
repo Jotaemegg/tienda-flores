@@ -3,6 +3,12 @@
    ============================================ */
 
 
+// --- Supabase Cliente ---
+let supabaseClient = null;
+if (typeof window.supabase !== 'undefined' && IS_SUPABASE_ACTIVE) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
 const app = document.getElementById('app');
 const navEl = document.getElementById('nav');
 const modal = document.getElementById('modal');
@@ -13,6 +19,13 @@ document.getElementById('year').textContent = new Date().getFullYear();
 /* ---------- UTILIDADES ---------- */
 const money = v => `S/ ${v.toFixed(2)}`;
 
+const withTimeout = (promise, ms = 3000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de conexión a la base de datos')), ms))
+  ]);
+};
+
 const waLink = (text) =>
   `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
 
@@ -20,7 +33,7 @@ const waProductMsg = (p, opts = {}) => {
   const isPromo = p.badge === 'sale';
   const tipo = isPromo ? 'la promoción' : 'el producto';
   let msg = `Hola, estoy interesado(a) en ${tipo} *${p.name}*`;
-  if (opts.size)  msg += `\nTamaño: ${opts.size}`;
+  if (opts.size) msg += `\nTamaño: ${opts.size}`;
   if (opts.color) msg += `\nColor: ${opts.color}`;
   return waLink(msg);
 };
@@ -239,7 +252,7 @@ function viewCatalog(params) {
   if (sort === 'sale') list.sort((a, b) => (b.badge === 'sale' ? 1 : 0) - (a.badge === 'sale' ? 1 : 0));
 
   const catName = cat === 'all' ? 'Todas las colecciones' : (CATEGORIES.find(c => c.id === cat)?.name || 'Catálogo');
-  const catImg  = cat !== 'all' ? (CATEGORIES.find(c => c.id === cat)?.img || '') : 'assets/productos sin usar/cupula-roja-1.png';
+  const catImg = cat !== 'all' ? (CATEGORIES.find(c => c.id === cat)?.img || '') : 'assets/productos sin usar/cupula-roja-1.png';
 
   return `
     <!-- cabecera con imagen de la categoría -->
@@ -529,7 +542,7 @@ function parseHash() {
   return { path, params: new URLSearchParams(query) };
 }
 
-function render() {
+async function render() {
   const { path, params } = parseHash();
   let html = '';
   let activeNav = path;
@@ -538,7 +551,10 @@ function render() {
   else if (path === '/catalogo') html = viewCatalog(params);
   else if (path === '/promociones') html = viewPromos();
   else if (path === '/sobre-nosotros') html = viewAbout();
-  else if (path.startsWith('/producto/')) {
+  else if (path === '/admin') {
+    html = await viewAdmin();
+    activeNav = '/admin';
+  } else if (path.startsWith('/producto/')) {
     html = viewProduct(path.split('/producto/')[1]);
     activeNav = '/catalogo';
   } else {
@@ -656,13 +672,17 @@ function bindDynamic() {
     }
     updateWaLink();
   }
+
+  if (parseHash().path === '/admin') {
+    bindAdminEvents();
+  }
 }
 
 /* ============================================
    PREMIUM — WA DINÁMICO
    ============================================ */
 function openPremiumWa(id, name) {
-  const box  = document.querySelector(`[name="box-${id}"]:checked`)?.value  || '';
+  const box = document.querySelector(`[name="box-${id}"]:checked`)?.value || '';
   const choc = document.querySelector(`[name="choc-${id}"]:checked`)?.value || '';
   const rose = document.querySelector(`[name="rose-${id}"]:checked`)?.value || '';
   const msg = `Hola, estoy interesado(a) en el producto *${name}*\nColor de caja: ${box}\nChocolates: ${choc}\nColor de rosa: ${rose}`;
@@ -670,7 +690,748 @@ function openPremiumWa(id, name) {
 }
 
 /* ============================================
-   INIT
+   ADMINISTRACIÓN & GESTIÓN SUPABASE
    ============================================ */
-window.addEventListener('hashchange', render);
+
+let currentAdminTab = 'products'; // 'products' o 'categories'
+
+async function loadDataFromSupabase() {
+  if (!supabaseClient) return;
+  try {
+    const { data: catData, error: catError } = await withTimeout(supabaseClient
+      .from('categories')
+      .select('*')
+      .order('name'), 3000);
+    
+    if (catError) throw catError;
+    
+    const { data: prodData, error: prodError } = await withTimeout(supabaseClient
+      .from('products')
+      .select('*')
+      .order('name'), 3000);
+      
+    if (prodError) throw prodError;
+    
+    if (catData) {
+      CATEGORIES = catData;
+    }
+    if (prodData) {
+      PRODUCTS = prodData.map(p => ({
+        ...p,
+        oldPrice: p.old_price
+      }));
+    }
+    console.log('Datos cargados exitosamente de Supabase.');
+  } catch (e) {
+    console.error('Error cargando datos de Supabase, usando fallback local:', e);
+  }
+}
+
+async function refreshDataAndRender() {
+  await loadDataFromSupabase();
+  render();
+}
+
+async function viewAdmin() {
+  if (!supabaseClient) {
+    return `
+      <section class="admin-view pt-header">
+        <div class="container">
+          <div class="admin-fallback-warning">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-top:2px;">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/>
+            </svg>
+            <div>
+              <strong>Base de datos no configurada.</strong> El panel administrativo requiere configurar las credenciales de Supabase en <code>config.js</code>. Actualmente ejecutándose con datos estáticos de prueba.
+            </div>
+          </div>
+          <div class="admin-login">
+            <h2>VOUDÚ</h2>
+            <p class="admin-login__subtitle">Panel de Control</p>
+            <p style="color: var(--c-muted); font-size: 0.9rem; margin-bottom: 20px;">Por favor, edita el archivo <code>config.js</code> con la URL y la Anon Key válidas de tu proyecto en Supabase para poder operar en tiempo real.</p>
+            <a href="#/" class="btn btn--primary">Volver al Inicio</a>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  let session = null;
+  try {
+    const sessionRes = await withTimeout(supabaseClient.auth.getSession(), 3000);
+    session = sessionRes?.data?.session;
+  } catch (e) {
+    console.error('Error de autenticación o timeout:', e);
+  }
+  
+  if (!session) {
+    return `
+      <section class="admin-view pt-header">
+        <div class="container">
+          <div class="admin-login">
+            <img src="assets/full-logo-no.png" alt="VOUDÚ" class="admin-login__logo" />
+            <h2>VOUDÚ Admin</h2>
+            <p class="admin-login__subtitle">Iniciar sesión en el panel</p>
+            <form id="adminLoginForm">
+              <div class="admin-login__group">
+                <label class="admin-login__label">Email</label>
+                <input type="email" id="adminEmail" class="admin-login__input" placeholder="admin@voudu.com" required autocomplete="username" />
+              </div>
+              <div class="admin-login__group">
+                <label class="admin-login__label">Contraseña</label>
+                <input type="password" id="adminPassword" class="admin-login__input" placeholder="••••••••" required autocomplete="current-password" />
+              </div>
+              <div class="admin-login__error" id="adminLoginError">Credenciales inválidas</div>
+              <button type="submit" class="btn btn--primary admin-login__btn">Entrar al Sistema</button>
+            </form>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  const totalProducts = PRODUCTS.length;
+  const totalCategories = CATEGORIES.length;
+  const hiddenProducts = PRODUCTS.filter(p => p.hidden).length;
+  const activeProducts = totalProducts - hiddenProducts;
+
+  return `
+    <section class="admin-view pt-header">
+      <div class="container">
+        
+        <div class="admin-header">
+          <div class="admin-header__title">
+            <h2>Panel Administrativo</h2>
+            <p>Conectado a Supabase: ${session.user.email}</p>
+          </div>
+          <div class="admin-header__actions">
+            <a href="#/" class="btn btn--ghost">Ver Tienda</a>
+            <button class="btn btn--primary" id="adminLogoutBtn">Cerrar Sesión</button>
+          </div>
+        </div>
+
+        <div class="admin-stats">
+          <div class="admin-stat-card">
+            <span class="admin-stat-card__title">Colecciones</span>
+            <span class="admin-stat-card__value">${totalCategories}</span>
+          </div>
+          <div class="admin-stat-card">
+            <span class="admin-stat-card__title">Total Productos</span>
+            <span class="admin-stat-card__value">${totalProducts}</span>
+          </div>
+          <div class="admin-stat-card">
+            <span class="admin-stat-card__title">Productos Visibles</span>
+            <span class="admin-stat-card__value">${activeProducts}</span>
+          </div>
+          <div class="admin-stat-card">
+            <span class="admin-stat-card__title">Productos Ocultos</span>
+            <span class="admin-stat-card__value">${hiddenProducts}</span>
+          </div>
+        </div>
+
+        <div class="admin-tabs">
+          <button class="admin-tab ${currentAdminTab === 'products' ? 'is-active' : ''}" data-tab="products">Productos</button>
+          <button class="admin-tab ${currentAdminTab === 'categories' ? 'is-active' : ''}" data-tab="categories">Colecciones</button>
+        </div>
+
+        <!-- Pestaña de Productos -->
+        <div class="admin-section ${currentAdminTab === 'products' ? 'is-active' : ''}" id="adminSectionProducts">
+          <div class="admin-section-header">
+            <h3>Productos en Catálogo</h3>
+            <button class="btn btn--primary" id="adminAddProductBtn">+ Nuevo Producto</button>
+          </div>
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Imagen</th>
+                  <th>ID / Código</th>
+                  <th>Nombre</th>
+                  <th>Categoría</th>
+                  <th>Precio</th>
+                  <th>Precio Ant.</th>
+                  <th>Etiqueta</th>
+                  <th>Visible</th>
+                  <th>Premium</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${PRODUCTS.map(p => {
+                  const catObj = CATEGORIES.find(c => c.id === p.category) || {};
+                  const badgeClass = p.badge ? `admin-badge admin-badge--${p.badge}` : '';
+                  return `
+                    <tr data-product-id="${p.id}">
+                      <td>
+                        <img src="${p.images?.[0] || 'assets/full-logo-no.png'}" class="admin-table__thumb" alt="${p.name}" onerror="this.src='assets/full-logo-no.png'" />
+                      </td>
+                      <td><span class="admin-table__id">${p.id}</span></td>
+                      <td><strong>${p.name}</strong></td>
+                      <td>${catObj.name || `<span style="color:var(--c-muted); font-style:italic;">Sin colección</span>`}</td>
+                      <td><span class="admin-table__price">${money(p.price)}</span></td>
+                      <td>${p.oldPrice != null && p.oldPrice > 0 ? money(p.oldPrice) : '<span style="color:var(--c-muted);">-</span>'}</td>
+                      <td>${p.badge ? `<span class="${badgeClass}">${p.badge === 'sale' ? 'Oferta' : p.badge === 'new' ? 'Nuevo' : 'Popular'}</span>` : '<span style="color:var(--c-muted);">-</span>'}</td>
+                      <td>
+                        <label class="admin-switch">
+                          <input type="checkbox" class="js-toggle-prod-visibility" data-id="${p.id}" ${!p.hidden ? 'checked' : ''} />
+                          <span class="admin-switch__slider"></span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="admin-switch">
+                          <input type="checkbox" class="js-toggle-prod-premium" data-id="${p.id}" ${p.premium ? 'checked' : ''} />
+                          <span class="admin-switch__slider"></span>
+                        </label>
+                      </td>
+                      <td>
+                        <div class="admin-table__actions">
+                          <button class="btn-admin-icon js-edit-product" data-id="${p.id}" title="Editar">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"/>
+                            </svg>
+                          </button>
+                          <button class="btn-admin-icon btn-admin-icon--danger js-delete-product" data-id="${p.id}" title="Eliminar">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('') || `<tr><td colspan="10" style="text-align:center; padding: 40px; color:var(--c-muted);">No hay productos registrados.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pestaña de Colecciones -->
+        <div class="admin-section ${currentAdminTab === 'categories' ? 'is-active' : ''}" id="adminSectionCategories">
+          <div class="admin-section-header">
+            <h3>Colecciones (Categorías)</h3>
+            <button class="btn btn--primary" id="adminAddCategoryBtn">+ Nueva Colección</button>
+          </div>
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Imagen</th>
+                  <th>ID / Código</th>
+                  <th>Nombre</th>
+                  <th>Visible</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${CATEGORIES.map(c => {
+                  return `
+                    <tr data-category-id="${c.id}">
+                      <td>
+                        <img src="${c.img || 'assets/full-logo-no.png'}" class="admin-table__thumb" alt="${c.name}" onerror="this.src='assets/full-logo-no.png'" />
+                      </td>
+                      <td><span class="admin-table__id">${c.id}</span></td>
+                      <td><strong>${c.name}</strong></td>
+                      <td>
+                        <label class="admin-switch">
+                          <input type="checkbox" class="js-toggle-cat-visibility" data-id="${c.id}" ${!c.hidden ? 'checked' : ''} />
+                          <span class="admin-switch__slider"></span>
+                        </label>
+                      </td>
+                      <td>
+                        <div class="admin-table__actions">
+                          <button class="btn-admin-icon js-edit-category" data-id="${c.id}" title="Editar">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"/>
+                            </svg>
+                          </button>
+                          <button class="btn-admin-icon btn-admin-icon--danger js-delete-category" data-id="${c.id}" title="Eliminar">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('') || `<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--c-muted);">No hay colecciones registradas.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  `;
+}
+
+function bindAdminEvents() {
+  // Login Form
+  const loginForm = document.getElementById('adminLoginForm');
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('adminEmail').value;
+      const password = document.getElementById('adminPassword').value;
+      const errorEl = document.getElementById('adminLoginError');
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        render();
+      } catch (err) {
+        errorEl.textContent = err.message || 'Error de inicio de sesión';
+        errorEl.style.display = 'block';
+      }
+    });
+  }
+
+  // Logout Button
+  const logoutBtn = document.getElementById('adminLogoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await supabaseClient.auth.signOut();
+      render();
+    });
+  }
+
+  // Tabs switching
+  document.querySelectorAll('.admin-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentAdminTab = btn.dataset.tab;
+      render();
+    });
+  });
+
+  // Product visibility toggle
+  document.querySelectorAll('.js-toggle-prod-visibility').forEach(input => {
+    input.addEventListener('change', async () => {
+      const id = input.dataset.id;
+      const isVisible = input.checked;
+      const { error } = await supabaseClient.from('products').update({ hidden: !isVisible }).eq('id', id);
+      if (error) {
+        alert('Error al actualizar visibilidad: ' + error.message);
+        input.checked = !isVisible;
+      } else {
+        const prod = PRODUCTS.find(x => x.id === id);
+        if (prod) prod.hidden = !isVisible;
+      }
+    });
+  });
+
+  // Product premium toggle
+  document.querySelectorAll('.js-toggle-prod-premium').forEach(input => {
+    input.addEventListener('change', async () => {
+      const id = input.dataset.id;
+      const isPremium = input.checked;
+      const { error } = await supabaseClient.from('products').update({ premium: isPremium }).eq('id', id);
+      if (error) {
+        alert('Error al actualizar premium: ' + error.message);
+        input.checked = !isPremium;
+      } else {
+        const prod = PRODUCTS.find(x => x.id === id);
+        if (prod) prod.premium = isPremium;
+      }
+    });
+  });
+
+  // Category visibility toggle
+  document.querySelectorAll('.js-toggle-cat-visibility').forEach(input => {
+    input.addEventListener('change', async () => {
+      const id = input.dataset.id;
+      const isVisible = input.checked;
+      const { error } = await supabaseClient.from('categories').update({ hidden: !isVisible }).eq('id', id);
+      if (error) {
+        alert('Error al actualizar visibilidad: ' + error.message);
+        input.checked = !isVisible;
+      } else {
+        const cat = CATEGORIES.find(x => x.id === id);
+        if (cat) cat.hidden = !isVisible;
+      }
+    });
+  });
+
+  // Delete product
+  document.querySelectorAll('.js-delete-product').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const prod = PRODUCTS.find(p => p.id === id);
+      if (confirm(`¿Estás seguro de que deseas eliminar el producto "${prod.name}"?`)) {
+        const { error } = await supabaseClient.from('products').delete().eq('id', id);
+        if (error) {
+          alert('Error al eliminar producto: ' + error.message);
+        } else {
+          refreshDataAndRender();
+        }
+      }
+    });
+  });
+
+  // Delete category
+  document.querySelectorAll('.js-delete-category').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const cat = CATEGORIES.find(c => c.id === id);
+      if (confirm(`¿Estás seguro de que deseas eliminar la colección "${cat.name}"?`)) {
+        const { error } = await supabaseClient.from('categories').delete().eq('id', id);
+        if (error) {
+          alert('Error al eliminar colección: ' + error.message);
+        } else {
+          refreshDataAndRender();
+        }
+      }
+    });
+  });
+
+  // Add category click
+  const addCategoryBtn = document.getElementById('adminAddCategoryBtn');
+  if (addCategoryBtn) {
+    addCategoryBtn.addEventListener('click', () => {
+      openCategoryFormModal();
+    });
+  }
+
+  // Edit category click
+  document.querySelectorAll('.js-edit-category').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const cat = CATEGORIES.find(c => c.id === id);
+      openCategoryFormModal(cat);
+    });
+  });
+
+  // Add product click
+  const addProductBtn = document.getElementById('adminAddProductBtn');
+  if (addProductBtn) {
+    addProductBtn.addEventListener('click', () => {
+      openProductFormModal();
+    });
+  }
+
+  // Edit product click
+  document.querySelectorAll('.js-edit-product').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const prod = PRODUCTS.find(p => p.id === id);
+      openProductFormModal(prod);
+    });
+  });
+}
+
+function openCategoryFormModal(cat = null) {
+  const isEdit = !!cat;
+  const title = isEdit ? 'Editar Colección' : 'Nueva Colección';
+  const html = `
+    <div class="modal-admin-header">
+      <h4>${title}</h4>
+      <button class="icon-btn nav-close" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <form id="adminCategoryForm">
+      <div class="admin-field" style="margin-bottom: 15px;">
+        <label>ID de Colección — código único, solo letras minúsculas y guiones</label>
+        <input type="text" id="catFormId" value="${cat?.id || ''}" ${isEdit ? 'readonly style="background:var(--c-bg-alt);"' : 'required placeholder="ej. san-valentin"'} />
+        ${!isEdit ? '<small style="color:var(--c-muted);font-size:0.8rem;">Ejemplos: primavera, rosas-xl, especial-navidad</small>' : ''}
+      </div>
+      <div class="admin-field" style="margin-bottom: 15px;">
+        <label>Nombre de la Colección — el que ven los clientes</label>
+        <input type="text" id="catFormName" value="${cat?.name || ''}" required placeholder="ej. Colección San Valentín" />
+      </div>
+      <div class="admin-field" style="margin-bottom: 15px;">
+        <label>📁 Subir Imagen de Portada desde tu PC</label>
+        <input type="file" id="catFormFile" accept="image/*" />
+        <span id="catUploadStatus" style="font-size: 0.85rem; color: var(--c-muted); display: block; margin-top: 5px;">La imagen se subirá automáticamente a su carpeta en Supabase.</span>
+      </div>
+      <div class="admin-field" style="margin-bottom: 15px;">
+        <label>🔗 URL de Imagen (se rellena sola al subir archivo)</label>
+        <input type="text" id="catFormImg" value="${cat?.img || ''}" placeholder="Aparecerá aquí al subir archivo" />
+      </div>
+      <div class="modal-admin-footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="submit" class="btn btn--primary">${isEdit ? 'Guardar Cambios' : 'Crear Colección'}</button>
+      </div>
+    </form>
+  `;
+  openModal(html);
+
+  // Auto-upload al seleccionar archivo y mostrar URL en el campo
+  document.getElementById('catFormFile')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const collectionId = document.getElementById('catFormId').value || 'sin-id';
+    const uploadStatus = document.getElementById('catUploadStatus');
+    const imgInput = document.getElementById('catFormImg');
+    if (uploadStatus) uploadStatus.textContent = 'Subiendo imagen...';
+    const fileExt = file.name.split('.').pop();
+    const fileName = `portada_${Date.now()}.${fileExt}`;
+    const filePath = `${collectionId}/${fileName}`;
+    const { error } = await supabaseClient.storage.from('flowers').upload(filePath, file);
+    if (error) {
+      if (uploadStatus) uploadStatus.textContent = `❌ Error: ${error.message}`;
+      return;
+    }
+    const { data: { publicUrl } } = supabaseClient.storage.from('flowers').getPublicUrl(filePath);
+    imgInput.value = publicUrl;
+    if (uploadStatus) uploadStatus.textContent = `✅ Subida correcta. URL lista.`;
+  });
+  
+  document.getElementById('adminCategoryForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('catFormId').value.trim();
+    const name = document.getElementById('catFormName').value.trim();
+    const img = document.getElementById('catFormImg').value.trim();
+    
+    if (!img) {
+      alert('Debe subir una imagen de portada o ingresar una URL.');
+      return;
+    }
+    
+    const payload = { id, name, img };
+    let res;
+    if (isEdit) {
+      res = await supabaseClient.from('categories').update(payload).eq('id', id);
+    } else {
+      payload.hidden = false;
+      res = await supabaseClient.from('categories').insert([payload]);
+    }
+    
+    if (res.error) {
+      alert('Error al guardar colección: ' + res.error.message);
+    } else {
+      closeModal();
+      refreshDataAndRender();
+    }
+  });
+}
+
+function openProductFormModal(prod = null) {
+  const isEdit = !!prod;
+  const title = isEdit ? 'Editar Producto' : 'Nuevo Producto';
+  
+  const categoryOptions = CATEGORIES.map(c => `
+    <option value="${c.id}" ${prod?.category === c.id ? 'selected' : ''}>${c.name}</option>
+  `).join('');
+  
+  const html = `
+    <div class="modal-admin-header">
+      <h4>${title}</h4>
+      <button class="icon-btn nav-close" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <form id="adminProductForm" style="max-height: 70vh; overflow-y: auto; padding-right: 10px;">
+      <div class="admin-form-grid">
+        
+        <div class="admin-field">
+          <label>ID / Código único del producto</label>
+          <input type="text" id="prodFormId" value="${prod?.id || ''}" ${isEdit ? 'readonly style="background:var(--c-bg-alt);"' : 'required placeholder="ej. cosmos-roja-grande"'} />
+          ${!isEdit ? '<small style="color:var(--c-muted);font-size:0.8rem;">Solo letras minúsculas y guiones. Ej: hortus-rosa, arcadius-xl, cupula-negra</small>' : ''}
+        </div>
+        
+        <div class="admin-field">
+          <label>Nombre del Producto — el que ven los clientes</label>
+          <input type="text" id="prodFormName" value="${prod?.name || ''}" required placeholder="ej. Cosmos · Rosa Eterna" />
+        </div>
+        
+        <div class="admin-field">
+          <label>Colección — selecciona a qué grupo pertenece</label>
+          <select id="prodFormCategory">
+            <option value="">Sin colección</option>
+            ${categoryOptions}
+          </select>
+        </div>
+        
+        <div class="admin-field">
+          <label>Precio actual (S/) — lo que paga el cliente</label>
+          <input type="number" step="0.01" id="prodFormPrice" value="${prod?.price || 0}" required placeholder="ej. 89.00" />
+        </div>
+        
+        <div class="admin-field">
+          <label>Precio anterior (S/) — solo si está en oferta</label>
+          <input type="number" step="0.01" id="prodFormOldPrice" value="${prod?.oldPrice || ''}" placeholder="ej. 110.00 (dejar vacío si no hay oferta)" />
+        </div>
+        
+        <div class="admin-field">
+          <label>Etiqueta — destaca el producto en el catálogo</label>
+          <select id="prodFormBadge">
+            <option value="" ${!prod?.badge ? 'selected' : ''}>Sin etiqueta</option>
+            <option value="new" ${prod?.badge === 'new' ? 'selected' : ''}>Nuevo — producto recién añadido</option>
+            <option value="sale" ${prod?.badge === 'sale' ? 'selected' : ''}>Oferta — mostrar % de descuento</option>
+            <option value="popular" ${prod?.badge === 'popular' ? 'selected' : ''}>Popular — más vendido</option>
+          </select>
+        </div>
+        
+        <div class="admin-field admin-form-grid__full">
+          <label>Descripción Corta — frase de impacto que aparece en la tarjeta</label>
+          <textarea id="prodFormShort" rows="2" required placeholder="ej. La rosa roja preservada bajo cristal. El clásico que nunca falla.">${prod?.short || ''}</textarea>
+        </div>
+        
+        <div class="admin-field admin-form-grid__full">
+          <label>Descripción Larga — detalles del producto en la página de detalle</label>
+          <textarea id="prodFormDesc" rows="4" required placeholder="ej. Rosa natural preservada con tratamiento artesanal que mantiene su frescura durante más de 3 años. Presentada en cúpula de cristal con base de madera.">${prod?.description || ''}</textarea>
+        </div>
+        
+        <div class="admin-field admin-form-grid__full">
+          <label>📁 Subir Imágenes desde tu PC — se guardan en la carpeta de la colección</label>
+          <input type="file" id="prodFormFiles" accept="image/*" multiple />
+          <span id="prodUploadStatus" style="font-size: 0.85rem; color: var(--c-muted); display: block; margin-top: 5px;">Selecciona primero la colección, luego elige las fotos. Puedes subir varias a la vez.</span>
+        </div>
+
+        <div class="admin-field admin-form-grid__full">
+          <label>🔗 URLs de Imágenes — se rellenan solas al subir archivo</label>
+          <textarea id="prodFormImages" rows="3" placeholder="Se llenarán automáticamente al subir fotos. O escribe rutas manuales separadas por coma.">${prod?.images ? prod.images.join(',\n') : ''}</textarea>
+        </div>
+        <div class="admin-field admin-form-grid__full">
+          <label>Colores disponibles (Opcional) — separados por comas</label>
+          <input type="text" id="prodFormColors" value="${prod?.colors ? prod.colors.join(', ') : ''}" placeholder="ej. Rojo, Rosa, Blanco, Lila, Negro" />
+        </div>
+
+        <div class="admin-field admin-form-grid__full">
+          <label>Tamaños disponibles (Opcional) — separados por comas</label>
+          <input type="text" id="prodFormSizes" value="${prod?.sizes ? prod.sizes.join(', ') : 'Única'}" placeholder="ej. Única (si solo hay un tamaño) o Pequeño, Mediano, Grande" />
+        </div>
+
+      </div>
+
+      <div class="modal-admin-footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="submit" class="btn btn--primary">${isEdit ? 'Guardar Cambios' : 'Crear Producto'}</button>
+      </div>
+    </form>
+  `;
+  openModal(html);
+
+  // Auto-upload al seleccionar archivos y mostrar URLs en textarea
+  document.getElementById('prodFormFiles')?.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const uploadStatus = document.getElementById('prodUploadStatus');
+    const textarea = document.getElementById('prodFormImages');
+    // Usar la categoría seleccionada como carpeta (igual que la colección)
+    const categoryId = document.getElementById('prodFormCategory').value || 'sin-categoria';
+    if (uploadStatus) uploadStatus.textContent = `Subiendo ${files.length} imagen(es) a la carpeta "${categoryId}"...`;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const filePath = `${categoryId}/${fileName}`;
+      const { error } = await supabaseClient.storage.from('flowers').upload(filePath, file);
+      if (error) {
+        if (uploadStatus) uploadStatus.textContent = `❌ Error subiendo ${file.name}: ${error.message}`;
+        return;
+      }
+      const { data: { publicUrl } } = supabaseClient.storage.from('flowers').getPublicUrl(filePath);
+      textarea.value = (textarea.value ? textarea.value + ',\n' : '') + publicUrl;
+    }
+    if (uploadStatus) uploadStatus.textContent = `✅ ${files.length} imagen(es) subida(s) a "${categoryId}". URLs listas abajo.`;
+    // Reset file input para evitar re-subir al guardar
+    e.target.value = '';
+  });
+
+  
+  document.getElementById('adminProductForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('prodFormId').value;
+    const name = document.getElementById('prodFormName').value;
+    const category = document.getElementById('prodFormCategory').value || null;
+    const price = parseFloat(document.getElementById('prodFormPrice').value);
+    const oldPriceRaw = document.getElementById('prodFormOldPrice').value;
+    const old_price = oldPriceRaw ? parseFloat(oldPriceRaw) : null;
+    const badge = document.getElementById('prodFormBadge').value || null;
+    const short = document.getElementById('prodFormShort').value;
+    const description = document.getElementById('prodFormDesc').value;
+    
+    let images = document.getElementById('prodFormImages').value
+      .split(/[\n,]/)
+      .map(x => x.trim())
+      .filter(x => x !== '');
+      
+    const fileInput = document.getElementById('prodFormFiles');
+    const uploadStatus = document.getElementById('prodUploadStatus');
+
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+      if (uploadStatus) uploadStatus.textContent = `Subiendo ${fileInput.files.length} imagen(es)...`;
+      for (let i = 0; i < fileInput.files.length; i++) {
+        const file = fileInput.files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+        const filePath = `products/${fileName}`;
+        
+        const { data, error } = await supabaseClient.storage
+          .from('flowers')
+          .upload(filePath, file);
+
+        if (error) {
+          alert(`Error al subir imagen (${file.name}): ` + error.message);
+          if (uploadStatus) uploadStatus.textContent = 'Error durante la subida.';
+          return;
+        }
+
+        const { data: { publicUrl } } = supabaseClient.storage
+          .from('flowers')
+          .getPublicUrl(filePath);
+
+        images.push(publicUrl);
+      }
+      if (uploadStatus) uploadStatus.textContent = 'Subida completada.';
+    }
+
+    if (images.length === 0) {
+      alert('Debe ingresar al menos una imagen (escribiendo la URL o subiendo un archivo).');
+      return;
+    }
+      
+    const colors = document.getElementById('prodFormColors').value
+      .split(',')
+      .map(x => x.trim())
+      .filter(x => x !== '');
+      
+    const sizes = document.getElementById('prodFormSizes').value
+      .split(',')
+      .map(x => x.trim())
+      .filter(x => x !== '');
+      
+    const payload = {
+      id,
+      name,
+      category,
+      price,
+      old_price,
+      badge,
+      short,
+      description,
+      images,
+      colors,
+      sizes
+    };
+    
+    let res;
+    if (isEdit) {
+      res = await supabaseClient.from('products').update(payload).eq('id', id);
+    } else {
+      payload.hidden = false;
+      payload.premium = false;
+      res = await supabaseClient.from('products').insert([payload]);
+    }
+    
+    if (res.error) {
+      alert('Error al guardar producto: ' + res.error.message);
+    } else {
+      closeModal();
+      refreshDataAndRender();
+    }
+  });
+}
+
+/* ============================================
+   INIT (SUPABASE AWARE)
+   ============================================ */
+// Renderizar inmediatamente con los datos locales de fallback
 render();
+
+// Cargar datos de Supabase en segundo plano
+if (supabaseClient) {
+  loadDataFromSupabase().then(() => {
+    // Volver a renderizar cuando el fetch complete exitosamente
+    render();
+  });
+}
+window.addEventListener('hashchange', render);
+
+
