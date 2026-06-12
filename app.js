@@ -159,38 +159,77 @@ function viewHome() {
 /* -------- CATÁLOGO LANDING (sin categoría seleccionada) -------- */
 function viewCatalogLanding() {
   const premiumProducts = PRODUCTS.filter(p => p.premium);
+  const visibleCats = CATEGORIES.filter(c => !c.hidden);
+
+  // Bloques que NO son --full ocupan 1 columna; --full ocupa 2.
+  // Para determinar si el último bloque queda solo, contamos cuántos bloques
+  // normales (no --full) hay y si su cantidad es impar, el último queda suelto.
+  const normalCats = visibleCats.filter(c => c.id !== 'hortus');
+  const lastIsAlone = normalCats.length % 2 !== 0;
+
   return `
     <section class="cat-landing pt-header">
-      ${CATEGORIES.filter(c => !c.hidden).map((c, i) => `
-        <a href="#/catalogo?cat=${c.id}" class="cat-land-block reveal ${c.id === 'hortus' ? 'cat-land-block--full' : ''}" style="transition-delay:${i * 80}ms">
+      ${visibleCats.map((c, i) => {
+        const isFull = c.id === 'hortus';
+        // El índice dentro de los bloques normales (no-full)
+        const normalIdx = normalCats.indexOf(c);
+        const isSolo = !isFull && lastIsAlone && normalIdx === normalCats.length - 1;
+        const extraClass = isFull ? 'cat-land-block--full' : isSolo ? 'cat-land-block--solo' : '';
+        return `
+        <a href="#/catalogo?cat=${c.id}" class="cat-land-block reveal ${extraClass}" style="transition-delay:${i * 80}ms">
           <div class="cat-land-img" style="background-image:url('${c.img}')"></div>
           <div class="cat-land-label">
             <span class="cat-land-eyebrow">Colección</span>
             <h2 class="cat-land-name">${c.name}</h2>
             <span class="cat-land-cta">Ver colección →</span>
           </div>
-        </a>
-      `).join('')}
+        </a>`;
+      }).join('')}
     </section>
 
-    <!-- SECCIÓN PREMIUM -->
-    <section class="premium-section">
-      <div class="premium-section__header">
-        <span class="premium-star">✦</span>
-        <h2 class="premium-section__title">PREMIUM</h2>
-        <span class="premium-star">✦</span>
+    <!-- TARJETA PREMIUM — banner editorial que lleva a la página dedicada -->
+    <a href="#/premium" class="premium-landing-card reveal">
+      <div class="premium-landing-card__img" style="background-image:url('${premiumProducts[0]?.images[0] || 'assets/premium/premium-1.jpg'}')" aria-hidden="true"></div>
+      <div class="premium-landing-card__overlay"></div>
+      <div class="premium-landing-card__body">
+        <span class="premium-landing-card__eyebrow">✦ &nbsp; Edición Exclusiva &nbsp; ✦</span>
+        <h2 class="premium-landing-card__title">Premium</h2>
+        <p class="premium-landing-card__desc">Cajas de lujo personalizables. Diseñadas para quienes buscan lo extraordinario.</p>
+        <span class="premium-landing-card__cta">Descubrir →</span>
       </div>
-      <div class="premium-grid">
-        ${premiumProducts.map(p => `
-          <div class="premium-card reveal">
-            <div class="premium-card__img-wrap">
-              <div class="premium-card__img" style="background-image:url('${p.images[0]}')"></div>
-            </div>
-            <div class="premium-card__body">
-              <h3 class="premium-card__name">${p.name}</h3>
-              <p class="premium-card__desc">Caja exclusiva personalizable</p>
+    </a>
+  `;
+}
 
-              <div class="premium-options">
+/* -------- PÁGINA PREMIUM -------- */
+function viewPremium() {
+  const premiumProducts = PRODUCTS.filter(p => p.premium);
+  return `
+    <!-- Cabecera de la página premium -->
+    <section class="premium-head">
+      <div class="premium-head__bg" style="background-image:url('${premiumProducts[0]?.images[0] || ''}')"></div>
+      <div class="premium-head__overlay"></div>
+      <div class="container premium-head__content">
+        <a href="#/catalogo" class="catalog-back">← Colecciones</a>
+        <span class="premium-head__eyebrow">✦ &nbsp; Edición Exclusiva &nbsp; ✦</span>
+        <h1 class="premium-head__title">Premium</h1>
+        <p class="premium-head__sub">Cajas de lujo personalizables, diseñadas pieza a pieza para quienes no se conforman con lo ordinario.</p>
+      </div>
+    </section>
+
+    <!-- Grid de productos premium -->
+    <section class="premium-page">
+      <div class="premium-page__grid">
+        ${premiumProducts.map(p => `
+          <div class="prem-card reveal">
+            <div class="prem-card__img-wrap">
+              <div class="prem-card__img" style="background-image:url('${p.images[0]}')"></div>
+            </div>
+            <div class="prem-card__body">
+              <h3 class="prem-card__name">${p.name}</h3>
+              <p class="prem-card__desc">${p.short}</p>
+
+              <div class="prem-card__options">
 
                 <div class="option-group">
                   <span class="option-label">Color de caja</span>
@@ -203,8 +242,8 @@ function viewCatalogLanding() {
                 <div class="option-group">
                   <span class="option-label">Chocolates</span>
                   <div class="option-pills">
-                    <label class="option-pill"><input type="radio" name="choc-${p.id}" value="Sin chocolates" checked><span>Opción 1 · Sin chocolates</span></label>
-                    <label class="option-pill"><input type="radio" name="choc-${p.id}" value="Con fresas al chocolate"><span>Opción 2 · Con fresas al chocolate</span></label>
+                    <label class="option-pill"><input type="radio" name="choc-${p.id}" value="Sin chocolates" checked><span>Sin chocolates</span></label>
+                    <label class="option-pill"><input type="radio" name="choc-${p.id}" value="Con fresas al chocolate"><span>Con fresas al chocolate</span></label>
                   </div>
                 </div>
 
@@ -213,19 +252,17 @@ function viewCatalogLanding() {
                   <div class="color-swatches">
                     <label class="color-swatch" title="Roja"><input type="radio" name="rose-${p.id}" value="Roja" checked><span class="swatch" style="background:#9b2335"></span></label>
                     <label class="color-swatch" title="Rosa"><input type="radio" name="rose-${p.id}" value="Rosa"><span class="swatch" style="background:#e8829a"></span></label>
-                    <label class="color-swatch" title="Blanca"><input type="radio" name="rose-${p.id}" value="Blanca"><span class="swatch" style="background:#f0ece4;border:1px solid rgba(255,255,255,.25)"></span></label>
+                    <label class="color-swatch" title="Blanca"><input type="radio" name="rose-${p.id}" value="Blanca"><span class="swatch" style="background:#f0ece4;border:1px solid rgba(110,48,52,.3)"></span></label>
                     <label class="color-swatch" title="Lila"><input type="radio" name="rose-${p.id}" value="Lila"><span class="swatch" style="background:#9b7ebf"></span></label>
                   </div>
                 </div>
 
               </div>
 
-              <div class="premium-card__cta">
-                <span class="premium-card__consult">Consultar precio <span class="premium-card__arrow">↓</span></span>
-                <button class="btn btn--wa premium-card__wa" onclick="openPremiumWa('${p.id}', '${p.name}')">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="flex-shrink:0">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
+              <div class="prem-card__footer">
+                <span class="prem-card__price-label">Precio a consultar</span>
+                <button class="btn btn--wa" onclick="openPremiumWa('${p.id}', '${p.name}')">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                   Comprar por WhatsApp
                 </button>
               </div>
@@ -549,6 +586,7 @@ async function render() {
 
   if (path === '/' || path === '') html = viewHome();
   else if (path === '/catalogo') html = viewCatalog(params);
+  else if (path === '/premium') html = viewPremium();
   else if (path === '/promociones') html = viewPromos();
   else if (path === '/sobre-nosotros') html = viewAbout();
   else if (path === '/admin') {
