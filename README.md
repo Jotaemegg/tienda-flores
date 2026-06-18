@@ -27,7 +27,7 @@ npx serve .
 
 Luego visita `http://localhost:8000`.
 
-## 🎨 Personalización (cuando me pases la paleta y logos)
+## 🎨 Personalización
 
 ### 1. Paleta de colores
 Edita las variables en `styles.css` → `:root`:
