@@ -2,7 +2,7 @@
    VOUDÚ · DATOS DE LA TIENDA
    ============================================ */
 
-let WHATSAPP_NUMBER = "51927599077";
+let WHATSAPP_NUMBER = "51913415564";
 
 /* ---------- CATEGORÍAS ---------- */
 let CATEGORIES = [

@@ -553,7 +553,7 @@ function viewAbout() {
           <span class="section__eyebrow">Escríbenos</span>
           <h2 class="about-contact__title">Contáctanos</h2>
           <div class="about-contact__card">
-            <p><strong>📞 Teléfono</strong><br>+51 927 599 077</p>
+            <p><strong>📞 Teléfono</strong><br>+51 913 415 564</p>
             <p><strong>✉ Email</strong><br>hola@voudu.com</p>
             <p><strong>⏰ Horario de atención</strong><br>Lun - Dom · 8:00 a 23:00</p>
             <a class="btn btn--wa" style="margin-top:20px;" target="_blank" rel="noopener"
